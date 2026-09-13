@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+import adif_io
+
+
+def load_required_fields(config_path: Path) -> list[str]:
+    """Load required field names from a JSON file and convert to uppercase."""
+    if not config_path.exists():
+        print(f"Error: Required fields JSON file not found at {config_path}")
+        sys.exit(1)
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    return [field.upper() for field in data.get("required_fields", [])]
+
+
+def process_adif_files(logs_dir: Path, required_fields: list[str]):
+    """Recursively process ADIF files, validate required fields, and aggregate records."""
+    if not logs_dir.exists() or not logs_dir.is_dir():
+        print(f"Error: Directory '{logs_dir}' does not exist.")
+        sys.exit(1)
+
+    all_qsos = []
+    validation_passed = True
+    files_processed = 0
+
+    adif_files = [p for p in logs_dir.rglob("*") if p.suffix.lower() in [".adif", ".adi"]]
+
+    if not adif_files:
+        print(f"Warning: No .adif or .adi files found in {logs_dir}")
+        return all_qsos, True
+
+    print(f"Found {len(adif_files)} ADIF file(s) to process.\n")
+
+    for file_path in adif_files:
+        files_processed += 1
+        relative_path = file_path.relative_to(logs_dir.parent)
+        print(f"Processing: {relative_path}")
+
+        try:
+            qsos, header = adif_io.read_from_file(str(file_path))
+        except Exception as e:
+            print(f"  [FAIL] Unable to parse file {relative_path}: {e}")
+            validation_passed = False
+            continue
+
+        for idx, qso in enumerate(qsos, start=1):
+            missing_fields = []
+            for field in required_fields:
+                val = qso.get(field)
+                if val is None or str(val).strip() == "":
+                    missing_fields.append(field)
+
+            if missing_fields:
+                validation_passed = False
+                callsign = qso.get("CALL", "UNKNOWN_CALL")
+                qso_date = qso.get("QSO_DATE", "UNKNOWN_DATE")
+                print(
+                    f"  [ERROR] QSO #{idx} ({callsign} on {qso_date}) in '{relative_path}' "
+                    f"is missing fields: {', '.join(missing_fields)}"
+                )
+
+        all_qsos.extend(qsos)
+
+    print(f"\nSummary: Processed {files_processed} file(s), total {len(all_qsos)} QSO record(s).")
+    return all_qsos, validation_passed
+
+
+def main():
+    # Process file is in repo/tests/, so repo root is two levels up
+    script_dir = Path(__file__).parent.resolve()
+    repo_root = script_dir.parent
+
+    logs_dir = repo_root / "logs"
+    config_file = script_dir / "required_fields.json"
+    output_combined_file = repo_root / "combined_logs.adi"
+
+    required_fields = load_required_fields(config_file)
+    print(f"Required fields to validate: {', '.join(required_fields)}\n")
+
+    qsos, validation_passed = process_adif_files(logs_dir, required_fields)
+
+    if not validation_passed:
+        print("\n Validation Failed: One or more ADIF records are missing required fields.")
+        sys.exit(1)
+
+    try:
+        qsos_sorted = sorted(
+            qsos, 
+            key=lambda q: (q.get("QSO_DATE", ""), q.get("TIME_ON", ""))
+        )
+    except Exception:
+        qsos_sorted = qsos
+
+    header_info = {
+        "ADIF_VER": "3.1.4",
+        "PROGRAMID": "GitHub Pipeline ADIF Aggregator",
+    }
+
+    adif_io.write_to_file(str(output_combined_file), qsos_sorted, header_info)
+    print(f" Validation Passed! Combined ADIF log written to: {output_combined_file.name}")
+
+
+if __name__ == "__main__":
+    main()

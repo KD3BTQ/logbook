@@ -410,7 +410,7 @@
       help: 'Your transmitter power, in watts, during this contact.' },
 
     { formId: 'rxCall',     adif: 'CALL',             type: 'text',
-      help: 'The callsign of the station you contacted. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info or HamDB.org, when you have an internet connection.' },
+      help: 'The callsign of the station you contacted. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info (US callsigns only), when you have an internet connection.' },
     { formId: 'rxOperator', adif: 'CONTACTED_OP',     type: 'text',
       help: 'The callsign of the person actually operating the other station, if different from their callsign - for example a guest operator at a club station.' },
     { formId: 'rxGrid',     adif: 'GRIDSQUARE',       type: 'text',
@@ -435,7 +435,7 @@
       help: 'The country the other station was operating from.' },
 
     { formId: 'txCall',     adif: 'STATION_CALLSIGN', type: 'text',
-      help: 'Your own callsign, as used for this specific contact. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info or HamDB.org, when you have an internet connection.' },
+      help: 'Your own callsign, as used for this specific contact. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info (US callsigns only), when you have an internet connection.' },
     { formId: 'txOperator', adif: 'OPERATOR',         type: 'text',
       help: 'The callsign of whoever was actually at the key or mic for this contact - useful if more than one operator shares a station.' },
     { formId: 'txGrid',     adif: 'MY_GRIDSQUARE',    type: 'text',
@@ -1156,17 +1156,21 @@
 
   // ---------------- Online callsign lookup (optional, needs internet) ----------------
   // Everything else in this file works fully offline. This one feature is the
-  // exception: it tries to fill in QTH City/State/Country (and Grid Square)
-  // from just a callsign, using two free lookup services:
+  // exception: it calls Callook.info (https://callook.info) to try to fill
+  // in QTH City/State/Country and Grid Square from just a callsign.
   //
-  //   1. Callook.info - US callsigns only, but built specifically for
-  //      direct browser use, so it's the most reliable of the two.
-  //   2. HamDB.org - broader (non-US) coverage, tried only if Callook
-  //      doesn't have the callsign.
+  // Callook.info only covers US-licensed callsigns (it's built on FCC data),
+  // but it's confirmed to work with a plain client-side fetch() over HTTPS -
+  // an earlier version of this also tried HamDB.org as a fallback for
+  // non-US callsigns, but HamDB's own documentation only ever shows a plain
+  // "http://" URL (never https), and it turned out to be exactly what was
+  // triggering the browser's mixed-content blocking once this page was
+  // served over HTTPS. It's been removed rather than risk that again.
   //
-  // If there's no internet connection, both services fail, or the callsign
-  // just isn't found, this fails quietly and leaves the fields for you to
-  // fill in by hand - it never blocks anything else in the tool.
+  // If there's no internet connection, Callook can't be reached, or the
+  // callsign isn't a US license Callook recognizes, this fails quietly and
+  // leaves the fields for you to fill in by hand - it never blocks anything
+  // else in the tool.
   //
   // Only triggered when you click the "Look up online" button, never
   // automatically, since it's the one thing here that reaches out to the
@@ -1196,35 +1200,7 @@
 
       return result;
     } catch (err) {
-      return null; // offline, CORS-blocked, bad response, etc.
-    }
-  }
-
-  async function tryHamdbLookup(callsign) {
-    try {
-      const url = 'https://api.hamdb.org/' + encodeURIComponent(callsign) + '/json/adiflogmanager';
-      const response = await fetch(url);
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      const record = data && data.hamdb && data.hamdb.callsign;
-      const status = data && data.hamdb && data.hamdb.messages && data.hamdb.messages.status;
-      if (!record || status === 'NOT_FOUND') return null;
-
-      const result = { city: '', state: '', country: '', grid: '' };
-      if (record.country) result.country = record.country;
-      if (record.state) result.state = record.state;
-      // addr2 is usually a "CITY, STATE ZIP"-style line - just take the city part.
-      if (record.addr2) {
-        const city = record.addr2.split(',')[0].trim();
-        if (city) result.city = city;
-      }
-      if (record.grid) result.grid = record.grid;
-
-      const gotSomething = result.city || result.state || result.country || result.grid;
-      return gotSomething ? result : null;
-    } catch (err) {
-      return null;
+      return null; // offline, network error, unexpected response shape, etc.
     }
   }
 
@@ -1275,22 +1251,16 @@
 
     statusEl.textContent = 'Looking up...';
 
-    let result = await tryCallookLookup(callsign);
-    let source = 'Callook.info';
+    const result = await tryCallookLookup(callsign);
 
     if (!result) {
-      result = await tryHamdbLookup(callsign);
-      source = 'HamDB.org';
-    }
-
-    if (!result) {
-      statusEl.textContent = "Couldn't find that callsign online.";
+      statusEl.textContent = "Couldn't find that callsign (Callook.info covers US-licensed callsigns only).";
       return;
     }
 
     const filledSomething = applyLookupResult(prefix, result);
     statusEl.textContent = filledSomething
-      ? 'Found on ' + source + ' - filled in what was available.'
+      ? 'Found on Callook.info - filled in what was available.'
       : 'Found the callsign, but no location data was available.';
   }
 

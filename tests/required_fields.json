@@ -1,0 +1,9 @@
+{
+  "required_fields": [
+    "CALL",
+    "QSO_DATE",
+    "TIME_ON",
+    "BAND",
+    "MODE"
+  ]
+}
