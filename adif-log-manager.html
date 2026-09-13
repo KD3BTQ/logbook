@@ -382,10 +382,22 @@
   // ============================================================
   // REQUIRED FIELDS
   // ------------------------------------------------------------
-  // A QSO must have a non-empty value in every field id listed here
-  // before it can be saved. These are the same ids used as "formId"
-  // in fieldMap, further down - add or remove ids here to change
-  // what counts as a "complete" QSO.
+  // A QSO must have a non-empty value in every field listed here
+  // before it can be saved. Write these EXACTLY as the field name
+  // appears in the ADIF spec (e.g. 'QSO_DATE', 'CALL', 'OPERATOR',
+  // 'MY_GRIDSQUARE') - the same names used as "adif" in fieldMap,
+  // further down. Do NOT include the ":LENGTH" part you'd see in
+  // a raw ADIF file (e.g. <OPERATOR:8>KJ4ABC12) - that length is
+  // just the byte-count of that field's value in one specific QSO
+  // record, not part of the field's name, and it's computed
+  // automatically wherever this file writes an ADIF field.
+  //
+  // Only fields that have their own input in the form (i.e. ones
+  // listed in fieldMap) can be required this way - a name that
+  // doesn't match any fieldMap entry is ignored (with a console
+  // warning at load time, to help catch typos) rather than
+  // breaking anything, since there's no fixed input box to
+  // highlight for it.
   //
   // An existing QSO that's missing one of these (e.g. one loaded
   // from a file created by other software, or an older/looser
@@ -393,7 +405,7 @@
   // border, and opening it for editing highlights exactly which
   // fields still need to be filled in.
   // ============================================================
-  const REQUIRED_FIELDS = ['qsoDate', 'qsoTime', 'qsoBand', 'qsoMode', 'rxCall'];
+  const REQUIRED_FIELDS = ['QSO_DATE', 'TIME_ON', 'BAND', 'MODE', 'CALL', 'OPERATOR'];
 
   // ============================================================
   // ADIF Log Manager
@@ -574,29 +586,60 @@
 
   // ---------------- Required-field validation ----------------
 
+  function getFormIdForAdifName(adifName) {
+    // Looks up which form field (if any) handles a given ADIF field name,
+    // using the same fieldMap the rest of the file already relies on.
+    const entry = fieldMap.find(function (f) {
+      return f.adif.toUpperCase() === adifName.toUpperCase();
+    });
+    return entry ? entry.formId : null;
+  }
+
   function getMissingRequiredFields(qso) {
-    return REQUIRED_FIELDS.filter(function (formId) {
+    // Returns the ADIF names (not form ids) of any required field that's
+    // empty. Field names in REQUIRED_FIELDS that don't map to an actual
+    // form field are skipped here - see warnAboutUnknownRequiredFields().
+    return REQUIRED_FIELDS.filter(function (adifName) {
+      const formId = getFormIdForAdifName(adifName);
+      if (!formId) return false;
       const value = qso[formId];
       return !value || !value.toString().trim();
     });
   }
 
-  function getFieldLabel(formId) {
+  function getFieldLabel(adifName) {
     // Reuse the form's own <label> text rather than keeping a separate
     // list of display names - one less thing to keep in sync.
+    const formId = getFormIdForAdifName(adifName);
+    if (!formId) return adifName;
     const label = document.querySelector('label[for="' + formId + '"]');
     return label ? label.textContent.replace(':', '').trim() : formId;
   }
 
-  function highlightMissingFields(missingFields) {
-    missingFields.forEach(function (formId) {
-      document.getElementById(formId).classList.add('missing-required');
+  function highlightMissingFields(missingAdifNames) {
+    missingAdifNames.forEach(function (adifName) {
+      const formId = getFormIdForAdifName(adifName);
+      if (formId) document.getElementById(formId).classList.add('missing-required');
     });
   }
 
   function clearRequiredFieldHighlights() {
-    REQUIRED_FIELDS.forEach(function (formId) {
-      document.getElementById(formId).classList.remove('missing-required');
+    REQUIRED_FIELDS.forEach(function (adifName) {
+      const formId = getFormIdForAdifName(adifName);
+      if (formId) document.getElementById(formId).classList.remove('missing-required');
+    });
+  }
+
+  function warnAboutUnknownRequiredFields() {
+    // A one-time sanity check at load time, so a typo in REQUIRED_FIELDS
+    // shows up in the console instead of silently doing nothing.
+    REQUIRED_FIELDS.forEach(function (adifName) {
+      if (!getFormIdForAdifName(adifName)) {
+        console.warn(
+          'REQUIRED_FIELDS: "' + adifName + '" is not a recognized ADIF field name ' +
+          'from fieldMap, so it will be ignored. Check spelling and omit any ":LENGTH" suffix.'
+        );
+      }
     });
   }
 
@@ -1663,7 +1706,9 @@
   // As the user fills in a required field, drop its red border right away
   // and update (or hide) the missing-fields banner to match, rather than
   // making them hit Save again just to see the warning clear.
-  REQUIRED_FIELDS.forEach(function (formId) {
+  REQUIRED_FIELDS.forEach(function (adifName) {
+    const formId = getFormIdForAdifName(adifName);
+    if (!formId) return; // unrecognized name - already warned about at load time
     document.getElementById(formId).addEventListener('input', function () {
       this.classList.remove('missing-required');
       const stillMissing = getMissingRequiredFields(readFormIntoQso());
@@ -1678,6 +1723,7 @@
   populateOtherAdifFieldsDatalist();
   attachFieldHelpIcons();
   attachSectionHelpIcons();
+  warnAboutUnknownRequiredFields();
   refreshTable();
 
 </script>
