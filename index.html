@@ -77,6 +77,18 @@
   .auto-filled {
     border: 2px solid orange;
   }
+  .missing-required {
+    border: 2px solid red;
+  }
+  .incomplete-qso td {
+    border: 2px solid red;
+  }
+  #missingFieldsWarning {
+    display: none;
+    color: red;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
   .lookup-status {
     font-size: 0.85em;
     font-style: italic;
@@ -179,6 +191,7 @@
 <div id="entryFormOverlay" onclick="if (event.target === this) cancelEntry();">
 <div id="entryForm">
   <h2 id="formTitle">New QSO</h2>
+  <div id="missingFieldsWarning">Missing required fields: <span id="missingFieldsList"></span></div>
 
   <fieldset>
     <legend>1. QSO Info</legend>
@@ -367,6 +380,22 @@
 <script>
 
   // ============================================================
+  // REQUIRED FIELDS
+  // ------------------------------------------------------------
+  // A QSO must have a non-empty value in every field id listed here
+  // before it can be saved. These are the same ids used as "formId"
+  // in fieldMap, further down - add or remove ids here to change
+  // what counts as a "complete" QSO.
+  //
+  // An existing QSO that's missing one of these (e.g. one loaded
+  // from a file created by other software, or an older/looser
+  // version of this file) shows up in the log list with a red
+  // border, and opening it for editing highlights exactly which
+  // fields still need to be filled in.
+  // ============================================================
+  const REQUIRED_FIELDS = ['qsoDate', 'qsoTime', 'qsoBand', 'qsoMode', 'rxCall'];
+
+  // ============================================================
   // ADIF Log Manager
   //
   // This page keeps the whole log in memory as an array of plain
@@ -540,6 +569,45 @@
       el.value = '';
       el.classList.remove('auto-filled');
     });
+  }
+
+
+  // ---------------- Required-field validation ----------------
+
+  function getMissingRequiredFields(qso) {
+    return REQUIRED_FIELDS.filter(function (formId) {
+      const value = qso[formId];
+      return !value || !value.toString().trim();
+    });
+  }
+
+  function getFieldLabel(formId) {
+    // Reuse the form's own <label> text rather than keeping a separate
+    // list of display names - one less thing to keep in sync.
+    const label = document.querySelector('label[for="' + formId + '"]');
+    return label ? label.textContent.replace(':', '').trim() : formId;
+  }
+
+  function highlightMissingFields(missingFields) {
+    missingFields.forEach(function (formId) {
+      document.getElementById(formId).classList.add('missing-required');
+    });
+  }
+
+  function clearRequiredFieldHighlights() {
+    REQUIRED_FIELDS.forEach(function (formId) {
+      document.getElementById(formId).classList.remove('missing-required');
+    });
+  }
+
+  function showMissingFieldsWarning(missingFields) {
+    document.getElementById('missingFieldsList').textContent =
+      missingFields.map(getFieldLabel).join(', ');
+    document.getElementById('missingFieldsWarning').style.display = 'block';
+  }
+
+  function hideMissingFieldsWarning() {
+    document.getElementById('missingFieldsWarning').style.display = 'none';
   }
 
 
@@ -1382,6 +1450,9 @@
 
     qsoList.forEach(function (qso, index) {
       const row = document.createElement('tr');
+      if (getMissingRequiredFields(qso).length > 0) {
+        row.classList.add('incomplete-qso');
+      }
       row.innerHTML =
         '<td>' + (qso.qsoDate || '') + '</td>' +
         '<td>' + (qso.qsoTime || '') + '</td>' +
@@ -1427,6 +1498,9 @@
     document.getElementById('rxLookupStatus').textContent = '';
     document.getElementById('txLookupStatus').textContent = '';
 
+    clearRequiredFieldHighlights();
+    hideMissingFieldsWarning();
+
     document.getElementById('formTitle').textContent = 'New QSO';
     document.getElementById('entryFormOverlay').style.display = 'flex';
   }
@@ -1437,6 +1511,16 @@
     renderExtraFieldsRows(qsoList[index].extraFields);
     document.getElementById('rxLookupStatus').textContent = '';
     document.getElementById('txLookupStatus').textContent = '';
+
+    clearRequiredFieldHighlights();
+    const missingFields = getMissingRequiredFields(qsoList[index]);
+    if (missingFields.length > 0) {
+      highlightMissingFields(missingFields);
+      showMissingFieldsWarning(missingFields);
+    } else {
+      hideMissingFieldsWarning();
+    }
+
     document.getElementById('formTitle').textContent = 'Edit QSO';
     document.getElementById('entryFormOverlay').style.display = 'flex';
   }
@@ -1451,10 +1535,14 @@
   function saveEntry() {
     const qso = readFormIntoQso();
 
-    if (!qso.rxCall) {
-      alert('Please enter a callsign for the station worked.');
+    clearRequiredFieldHighlights();
+    const missingFields = getMissingRequiredFields(qso);
+    if (missingFields.length > 0) {
+      highlightMissingFields(missingFields);
+      showMissingFieldsWarning(missingFields);
       return;
     }
+    hideMissingFieldsWarning();
 
     const extraFields = readExtraFieldsFromForm();
     for (const name in extraFields) {
@@ -1569,6 +1657,21 @@
   ['rxCqZone', 'rxItuZone', 'txCqZone', 'txItuZone'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', function () {
       this.classList.remove('auto-filled');
+    });
+  });
+
+  // As the user fills in a required field, drop its red border right away
+  // and update (or hide) the missing-fields banner to match, rather than
+  // making them hit Save again just to see the warning clear.
+  REQUIRED_FIELDS.forEach(function (formId) {
+    document.getElementById(formId).addEventListener('input', function () {
+      this.classList.remove('missing-required');
+      const stillMissing = getMissingRequiredFields(readFormIntoQso());
+      if (stillMissing.length > 0) {
+        showMissingFieldsWarning(stillMissing);
+      } else {
+        hideMissingFieldsWarning();
+      }
     });
   });
 
