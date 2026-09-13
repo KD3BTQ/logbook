@@ -410,7 +410,7 @@
       help: 'Your transmitter power, in watts, during this contact.' },
 
     { formId: 'rxCall',     adif: 'CALL',             type: 'text',
-      help: 'The callsign of the station you contacted. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info or HamDB.org, when you have an internet connection.' },
+      help: 'The callsign of the station you contacted. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info (and HamDB.org, if the optional proxy is set up), when you have an internet connection.' },
     { formId: 'rxOperator', adif: 'CONTACTED_OP',     type: 'text',
       help: 'The callsign of the person actually operating the other station, if different from their callsign - for example a guest operator at a club station.' },
     { formId: 'rxGrid',     adif: 'GRIDSQUARE',       type: 'text',
@@ -435,7 +435,7 @@
       help: 'The country the other station was operating from.' },
 
     { formId: 'txCall',     adif: 'STATION_CALLSIGN', type: 'text',
-      help: 'Your own callsign, as used for this specific contact. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info or HamDB.org, when you have an internet connection.' },
+      help: 'Your own callsign, as used for this specific contact. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info (and HamDB.org, if the optional proxy is set up), when you have an internet connection.' },
     { formId: 'txOperator', adif: 'OPERATOR',         type: 'text',
       help: 'The callsign of whoever was actually at the key or mic for this contact - useful if more than one operator shares a station.' },
     { formId: 'txGrid',     adif: 'MY_GRIDSQUARE',    type: 'text',
@@ -1157,28 +1157,37 @@
   // ---------------- Online callsign lookup (optional, needs internet) ----------------
   // Everything else in this file works fully offline. This one feature is the
   // exception: it tries to fill in QTH City/State/Country, Grid Square, and
-  // Lat/Lon from just a callsign, using two free lookup services:
+  // Lat/Lon from just a callsign.
   //
-  //   1. Callook.info - US callsigns only, but confirmed to work with a
-  //      plain client-side fetch() over HTTPS. Tried first.
-  //   2. HamDB.org - broader (non-US) coverage, tried only if Callook
-  //      doesn't recognize the callsign.
+  // Callook.info (https://callook.info) is the primary source - US callsigns
+  // only, but confirmed to work with a plain client-side fetch() over HTTPS.
   //
-  // Note: an earlier version dropped HamDB after a "Mixed Content" browser
-  // error appeared once this page was deployed over HTTPS, since HamDB's
-  // own docs only ever show a plain "http://" URL. That may have actually
-  // been a local network/proxy issue rather than HamDB itself - if the
-  // mixed-content error comes back, HamDB is the prime suspect again (check
-  // the browser's Network tab, not just the console, to see which request
-  // it is), and pulling the tryHamdbLookup() call back out is the fix.
+  // HamDB.org would cover non-US callsigns too, but it CANNOT be called
+  // directly from a browser on an HTTPS page: confirmed via a real console
+  // error, HamDB's server redirects an https:// request to a plain http://
+  // URL (e.g. https://api.hamdb.org/UR4QWW/... redirects to
+  // http://api.hamdb.org/v1/ur4qww/...), and browsers block following a
+  // redirect that downgrades to an insecure URL ("Mixed Content" error).
+  // This is a bug in HamDB's own server, not something fixable by changing
+  // the URL we request - so it isn't called directly here at all.
   //
-  // If there's no internet connection, both services fail, or the callsign
-  // just isn't found anywhere, this fails quietly and leaves the fields for
-  // you to fill in by hand - it never blocks anything else in the tool.
+  // To restore non-US lookups, deploy the small proxy in
+  // hamdb-proxy-worker.js (a free Cloudflare Worker - see its comments for
+  // deploy steps) and paste its URL into HAMDB_PROXY_URL below. A server
+  // calling HamDB isn't subject to the browser's mixed-content rule, so the
+  // proxy can reach HamDB fine and hand the result back over HTTPS. Leave
+  // HAMDB_PROXY_URL blank to just use Callook.info (US-only).
+  //
+  // If there's no internet connection, nothing configured can be reached,
+  // or the callsign just isn't found, this fails quietly and leaves the
+  // fields for you to fill in by hand - it never blocks anything else in
+  // the tool.
   //
   // Only triggered when you click the "Look up online" button, never
   // automatically, since it's the one thing here that reaches out to the
   // network.
+
+  const HAMDB_PROXY_URL = ''; // e.g. 'https://your-worker.your-subdomain.workers.dev'
 
   async function tryCallookLookup(callsign) {
     try {
@@ -1211,8 +1220,10 @@
   }
 
   async function tryHamdbLookup(callsign) {
+    if (!HAMDB_PROXY_URL) return null; // not configured - Callook-only until it is
+
     try {
-      const url = 'https://api.hamdb.org/' + encodeURIComponent(callsign) + '/json/adiflogmanager';
+      const url = HAMDB_PROXY_URL + '?callsign=' + encodeURIComponent(callsign);
       const response = await fetch(url);
       if (!response.ok) return null;
 
