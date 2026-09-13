@@ -1184,7 +1184,7 @@
       const data = await response.json();
       if (data.status !== 'VALID') return null; // includes INVALID and UPDATING
 
-      const result = { city: '', state: '', country: 'United States', grid: '' };
+      const result = { city: '', state: '', country: 'United States', grid: '', lat: '', lon: '' };
 
       // address.line2 looks like "NEWINGTON, CT 06111" - split into city/state.
       if (data.address && data.address.line2) {
@@ -1194,8 +1194,10 @@
           result.state = match[2].trim().toUpperCase();
         }
       }
-      if (data.location && data.location.gridsquare) {
-        result.grid = data.location.gridsquare;
+      if (data.location) {
+        if (data.location.gridsquare) result.grid = data.location.gridsquare;
+        if (data.location.latitude) result.lat = data.location.latitude;
+        if (data.location.longitude) result.lon = data.location.longitude;
       }
 
       return result;
@@ -1222,9 +1224,31 @@
       document.getElementById(prefix + 'City').classList.add('auto-filled');
       filledSomething = true;
     }
-    if (result.grid) {
-      // Reuse the existing grid -> lat/lon -> CQ/ITU zone cascade so
-      // everything downstream fills in too.
+    if (result.lat && result.lon) {
+      // Callook gives an exact lat/lon - use that directly rather than
+      // re-deriving it from the grid square, which would only give the
+      // center of that grid cell (a coarser approximation).
+      document.getElementById(prefix + 'Lat').value = result.lat;
+      document.getElementById(prefix + 'Lon').value = result.lon;
+      document.getElementById(prefix + 'Lat').classList.add('auto-filled');
+      document.getElementById(prefix + 'Lon').classList.add('auto-filled');
+
+      if (result.grid) {
+        document.getElementById(prefix + 'Grid').value = result.grid;
+      } else {
+        // Callook didn't give a grid square - derive one from the precise
+        // lat/lon we do have, using the same math as everywhere else.
+        const derivedGrid = latLonToGrid(parseFloat(result.lat), parseFloat(result.lon));
+        if (derivedGrid) document.getElementById(prefix + 'Grid').value = derivedGrid;
+      }
+      document.getElementById(prefix + 'Grid').classList.add('auto-filled');
+
+      // CQ/ITU zone from the precise coordinates, same as manual entry would.
+      fillZonesFromLatLon(prefix, parseFloat(result.lat), parseFloat(result.lon));
+      filledSomething = true;
+    } else if (result.grid) {
+      // No direct lat/lon from Callook, but we do have a grid square -
+      // fall back to the existing grid -> lat/lon -> zone cascade.
       document.getElementById(prefix + 'Grid').value = result.grid;
       document.getElementById(prefix + 'Grid').classList.add('auto-filled');
       fillFromGrid(prefix);
