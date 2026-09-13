@@ -89,6 +89,11 @@
     font-weight: bold;
     margin-bottom: 10px;
   }
+  .flag-icon {
+    vertical-align: middle;
+    margin-left: 3px;
+    border: 1px solid #ccc;
+  }
   .lookup-status {
     font-size: 0.85em;
     font-style: italic;
@@ -405,7 +410,7 @@
   // border, and opening it for editing highlights exactly which
   // fields still need to be filled in.
   // ============================================================
-  const REQUIRED_FIELDS = ['QSO_DATE', 'TIME_ON', 'BAND', 'MODE', 'CALL', 'OPERATOR'];
+  const REQUIRED_FIELDS = ['QSO_DATE', 'TIME_ON', 'BAND', 'MODE', 'CALL'];
 
   // ============================================================
   // ADIF Log Manager
@@ -1485,6 +1490,205 @@
   }
 
 
+  // ---------------- Flags for the log table (country + US state) ----------------
+  // Purely cosmetic, and entirely dependent on having an internet connection:
+  // flag images are loaded from flagcdn.com (a free, no-key-required CDN that
+  // hosts both country flags and US state flags on one consistent URL
+  // scheme). If there's no connection, or flagcdn can't be reached, the
+  // <img> just fails to load - the onerror handler hides it rather than
+  // showing a broken-image icon, so this never looks broken, it just quietly
+  // doesn't show a flag.
+  //
+  // Matching a QSO's free-text Country/State fields to a flag means mapping
+  // whatever was typed (a full name, an abbreviation, a common alias) to
+  // flagcdn's code for it. These two tables are that mapping - add more
+  // countries/aliases here as needed, the same way fieldMap or the ADIF
+  // field list further up would be extended.
+
+  const COUNTRIES = [
+    { code: 'us', name: 'United States', aliases: ['USA', 'UNITED STATES OF AMERICA'] },
+    { code: 'ca', name: 'Canada' },
+    { code: 'mx', name: 'Mexico' },
+    { code: 'gt', name: 'Guatemala' }, { code: 'bz', name: 'Belize' },
+    { code: 'sv', name: 'El Salvador' }, { code: 'hn', name: 'Honduras' },
+    { code: 'ni', name: 'Nicaragua' }, { code: 'cr', name: 'Costa Rica' },
+    { code: 'pa', name: 'Panama' },
+    { code: 'cu', name: 'Cuba' }, { code: 'jm', name: 'Jamaica' },
+    { code: 'ht', name: 'Haiti' }, { code: 'do', name: 'Dominican Republic' },
+    { code: 'pr', name: 'Puerto Rico' }, { code: 'bs', name: 'Bahamas' },
+    { code: 'tt', name: 'Trinidad and Tobago' }, { code: 'bb', name: 'Barbados' },
+    { code: 'gd', name: 'Grenada' }, { code: 'lc', name: 'Saint Lucia' },
+    { code: 'vc', name: 'Saint Vincent and the Grenadines' },
+    { code: 'ag', name: 'Antigua and Barbuda' }, { code: 'dm', name: 'Dominica' },
+    { code: 'kn', name: 'Saint Kitts and Nevis' },
+
+    { code: 'br', name: 'Brazil' }, { code: 'ar', name: 'Argentina' },
+    { code: 'cl', name: 'Chile' }, { code: 'pe', name: 'Peru' },
+    { code: 'co', name: 'Colombia' }, { code: 've', name: 'Venezuela' },
+    { code: 'ec', name: 'Ecuador' }, { code: 'bo', name: 'Bolivia' },
+    { code: 'py', name: 'Paraguay' }, { code: 'uy', name: 'Uruguay' },
+    { code: 'gy', name: 'Guyana' }, { code: 'sr', name: 'Suriname' },
+
+    { code: 'gb', name: 'United Kingdom',
+      aliases: ['UK', 'ENGLAND', 'SCOTLAND', 'WALES', 'NORTHERN IRELAND', 'GREAT BRITAIN'] },
+    { code: 'ie', name: 'Ireland' }, { code: 'fr', name: 'France' },
+    { code: 'de', name: 'Germany' }, { code: 'es', name: 'Spain' },
+    { code: 'pt', name: 'Portugal' }, { code: 'it', name: 'Italy' },
+    { code: 'nl', name: 'Netherlands', aliases: ['HOLLAND'] },
+    { code: 'be', name: 'Belgium' }, { code: 'ch', name: 'Switzerland' },
+    { code: 'at', name: 'Austria' }, { code: 'dk', name: 'Denmark' },
+    { code: 'se', name: 'Sweden' }, { code: 'no', name: 'Norway' },
+    { code: 'fi', name: 'Finland' }, { code: 'is', name: 'Iceland' },
+    { code: 'pl', name: 'Poland' }, { code: 'cz', name: 'Czech Republic', aliases: ['CZECHIA'] },
+    { code: 'sk', name: 'Slovakia' }, { code: 'hu', name: 'Hungary' },
+    { code: 'ro', name: 'Romania' }, { code: 'bg', name: 'Bulgaria' },
+    { code: 'gr', name: 'Greece' }, { code: 'tr', name: 'Turkey', aliases: ['TURKIYE'] },
+    { code: 'ua', name: 'Ukraine' }, { code: 'by', name: 'Belarus' },
+    { code: 'ru', name: 'Russia', aliases: ['RUSSIAN FEDERATION'] },
+    { code: 'lt', name: 'Lithuania' }, { code: 'lv', name: 'Latvia' },
+    { code: 'ee', name: 'Estonia' }, { code: 'hr', name: 'Croatia' },
+    { code: 'si', name: 'Slovenia' }, { code: 'rs', name: 'Serbia' },
+    { code: 'ba', name: 'Bosnia and Herzegovina' }, { code: 'me', name: 'Montenegro' },
+    { code: 'mk', name: 'North Macedonia' }, { code: 'al', name: 'Albania' },
+    { code: 'md', name: 'Moldova' }, { code: 'lu', name: 'Luxembourg' },
+    { code: 'mt', name: 'Malta' }, { code: 'cy', name: 'Cyprus' },
+    { code: 'li', name: 'Liechtenstein' }, { code: 'mc', name: 'Monaco' },
+    { code: 'sm', name: 'San Marino' }, { code: 'va', name: 'Vatican City', aliases: ['VATICAN'] },
+    { code: 'ad', name: 'Andorra' }, { code: 'xk', name: 'Kosovo' },
+
+    { code: 'cn', name: 'China' }, { code: 'jp', name: 'Japan' },
+    { code: 'kr', name: 'South Korea', aliases: ['KOREA', 'REPUBLIC OF KOREA'] },
+    { code: 'kp', name: 'North Korea' }, { code: 'in', name: 'India' },
+    { code: 'pk', name: 'Pakistan' }, { code: 'bd', name: 'Bangladesh' },
+    { code: 'lk', name: 'Sri Lanka' }, { code: 'np', name: 'Nepal' },
+    { code: 'mm', name: 'Myanmar', aliases: ['BURMA'] }, { code: 'th', name: 'Thailand' },
+    { code: 'vn', name: 'Vietnam' }, { code: 'kh', name: 'Cambodia' },
+    { code: 'la', name: 'Laos' }, { code: 'my', name: 'Malaysia' },
+    { code: 'sg', name: 'Singapore' }, { code: 'id', name: 'Indonesia' },
+    { code: 'ph', name: 'Philippines' }, { code: 'tw', name: 'Taiwan' },
+    { code: 'hk', name: 'Hong Kong' }, { code: 'mo', name: 'Macau' },
+    { code: 'mn', name: 'Mongolia' }, { code: 'kz', name: 'Kazakhstan' },
+    { code: 'uz', name: 'Uzbekistan' }, { code: 'tm', name: 'Turkmenistan' },
+    { code: 'kg', name: 'Kyrgyzstan' }, { code: 'tj', name: 'Tajikistan' },
+    { code: 'af', name: 'Afghanistan' }, { code: 'ir', name: 'Iran' },
+    { code: 'iq', name: 'Iraq' }, { code: 'sa', name: 'Saudi Arabia' },
+    { code: 'ae', name: 'United Arab Emirates', aliases: ['UAE'] },
+    { code: 'qa', name: 'Qatar' }, { code: 'kw', name: 'Kuwait' },
+    { code: 'bh', name: 'Bahrain' }, { code: 'om', name: 'Oman' },
+    { code: 'ye', name: 'Yemen' }, { code: 'jo', name: 'Jordan' },
+    { code: 'lb', name: 'Lebanon' }, { code: 'sy', name: 'Syria' },
+    { code: 'il', name: 'Israel' }, { code: 'ps', name: 'Palestine' },
+
+    { code: 'au', name: 'Australia' }, { code: 'nz', name: 'New Zealand' },
+    { code: 'pg', name: 'Papua New Guinea' }, { code: 'fj', name: 'Fiji' },
+    { code: 'sb', name: 'Solomon Islands' }, { code: 'vu', name: 'Vanuatu' },
+    { code: 'ws', name: 'Samoa' }, { code: 'to', name: 'Tonga' },
+    { code: 'ki', name: 'Kiribati' }, { code: 'fm', name: 'Micronesia' },
+    { code: 'mh', name: 'Marshall Islands' }, { code: 'pw', name: 'Palau' },
+    { code: 'nr', name: 'Nauru' }, { code: 'tv', name: 'Tuvalu' },
+
+    { code: 'za', name: 'South Africa' }, { code: 'eg', name: 'Egypt' },
+    { code: 'ng', name: 'Nigeria' }, { code: 'ke', name: 'Kenya' },
+    { code: 'et', name: 'Ethiopia' }, { code: 'gh', name: 'Ghana' },
+    { code: 'ma', name: 'Morocco' }, { code: 'dz', name: 'Algeria' },
+    { code: 'tn', name: 'Tunisia' }, { code: 'ly', name: 'Libya' },
+    { code: 'sd', name: 'Sudan' }, { code: 'ug', name: 'Uganda' },
+    { code: 'tz', name: 'Tanzania' }, { code: 'zw', name: 'Zimbabwe' },
+    { code: 'zm', name: 'Zambia' }, { code: 'mz', name: 'Mozambique' },
+    { code: 'ao', name: 'Angola' }, { code: 'na', name: 'Namibia' },
+    { code: 'bw', name: 'Botswana' }, { code: 'sn', name: 'Senegal' },
+    { code: 'ci', name: "Ivory Coast", aliases: ["COTE D'IVOIRE", 'COTE DIVOIRE'] },
+    { code: 'cm', name: 'Cameroon' },
+    { code: 'cd', name: 'Democratic Republic of the Congo', aliases: ['DR CONGO'] },
+    { code: 'cg', name: 'Republic of the Congo', aliases: ['CONGO'] },
+    { code: 'ga', name: 'Gabon' }, { code: 'rw', name: 'Rwanda' },
+    { code: 'mg', name: 'Madagascar' }, { code: 'mu', name: 'Mauritius' },
+    { code: 'sc', name: 'Seychelles' }, { code: 'mw', name: 'Malawi' },
+    { code: 'ls', name: 'Lesotho' }, { code: 'sz', name: 'Eswatini', aliases: ['SWAZILAND'] },
+    { code: 'ne', name: 'Niger' }, { code: 'ml', name: 'Mali' },
+    { code: 'bf', name: 'Burkina Faso' }, { code: 'td', name: 'Chad' },
+    { code: 'so', name: 'Somalia' }, { code: 'er', name: 'Eritrea' },
+    { code: 'dj', name: 'Djibouti' }, { code: 'cf', name: 'Central African Republic' },
+    { code: 'gm', name: 'Gambia' }, { code: 'gn', name: 'Guinea' },
+    { code: 'sl', name: 'Sierra Leone' }, { code: 'lr', name: 'Liberia' },
+    { code: 'tg', name: 'Togo' }, { code: 'bj', name: 'Benin' },
+    { code: 'gq', name: 'Equatorial Guinea' }, { code: 'bi', name: 'Burundi' },
+    { code: 'cv', name: 'Cape Verde' }, { code: 'gl', name: 'Greenland' }
+  ];
+
+  const COUNTRY_LOOKUP = {};
+  COUNTRIES.forEach(function (c) {
+    COUNTRY_LOOKUP[c.name.toUpperCase()] = c;
+    COUNTRY_LOOKUP[c.code.toUpperCase()] = c;
+    (c.aliases || []).forEach(function (alias) {
+      COUNTRY_LOOKUP[alias.toUpperCase()] = c;
+    });
+  });
+
+  const US_STATES = [
+    { code: 'al', name: 'Alabama' }, { code: 'ak', name: 'Alaska' },
+    { code: 'az', name: 'Arizona' }, { code: 'ar', name: 'Arkansas' },
+    { code: 'ca', name: 'California' }, { code: 'co', name: 'Colorado' },
+    { code: 'ct', name: 'Connecticut' }, { code: 'de', name: 'Delaware' },
+    { code: 'fl', name: 'Florida' }, { code: 'ga', name: 'Georgia' },
+    { code: 'hi', name: 'Hawaii' }, { code: 'id', name: 'Idaho' },
+    { code: 'il', name: 'Illinois' }, { code: 'in', name: 'Indiana' },
+    { code: 'ia', name: 'Iowa' }, { code: 'ks', name: 'Kansas' },
+    { code: 'ky', name: 'Kentucky' }, { code: 'la', name: 'Louisiana' },
+    { code: 'me', name: 'Maine' }, { code: 'md', name: 'Maryland' },
+    { code: 'ma', name: 'Massachusetts' }, { code: 'mi', name: 'Michigan' },
+    { code: 'mn', name: 'Minnesota' }, { code: 'ms', name: 'Mississippi' },
+    { code: 'mo', name: 'Missouri' }, { code: 'mt', name: 'Montana' },
+    { code: 'ne', name: 'Nebraska' }, { code: 'nv', name: 'Nevada' },
+    { code: 'nh', name: 'New Hampshire' }, { code: 'nj', name: 'New Jersey' },
+    { code: 'nm', name: 'New Mexico' }, { code: 'ny', name: 'New York' },
+    { code: 'nc', name: 'North Carolina' }, { code: 'nd', name: 'North Dakota' },
+    { code: 'oh', name: 'Ohio' }, { code: 'ok', name: 'Oklahoma' },
+    { code: 'or', name: 'Oregon' }, { code: 'pa', name: 'Pennsylvania' },
+    { code: 'ri', name: 'Rhode Island' }, { code: 'sc', name: 'South Carolina' },
+    { code: 'sd', name: 'South Dakota' }, { code: 'tn', name: 'Tennessee' },
+    { code: 'tx', name: 'Texas' }, { code: 'ut', name: 'Utah' },
+    { code: 'vt', name: 'Vermont' }, { code: 'va', name: 'Virginia' },
+    { code: 'wa', name: 'Washington' }, { code: 'wv', name: 'West Virginia' },
+    { code: 'wi', name: 'Wisconsin' }, { code: 'wy', name: 'Wyoming' },
+    { code: 'dc', name: 'District of Columbia' }
+  ];
+
+  const US_STATE_LOOKUP = {};
+  US_STATES.forEach(function (s) {
+    US_STATE_LOOKUP[s.name.toUpperCase()] = s;
+    US_STATE_LOOKUP[s.code.toUpperCase()] = s;
+  });
+
+  function escapeHtmlAttribute(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function buildFlagsHtml(qso) {
+    const country = qso.rxCountry ? COUNTRY_LOOKUP[qso.rxCountry.trim().toUpperCase()] : null;
+    let html = '';
+
+    if (country && country.code === 'us' && qso.rxState) {
+      const state = US_STATE_LOOKUP[qso.rxState.trim().toUpperCase()];
+      if (state) {
+        html += '<img src="https://flagcdn.com/20x15/us-' + state.code + '.png" ' +
+          'alt="" title="' + escapeHtmlAttribute(state.name) + '" class="flag-icon" ' +
+          'onerror="this.style.display=\'none\'"> ';
+      }
+    }
+
+    if (country) {
+      html += '<img src="https://flagcdn.com/20x15/' + country.code + '.png" ' +
+        'alt="" title="' + escapeHtmlAttribute(country.name) + '" class="flag-icon" ' +
+        'onerror="this.style.display=\'none\'">';
+    }
+
+    return html;
+  }
+
+
   // ---------------- UI actions ----------------
 
   function refreshTable() {
@@ -1501,7 +1705,7 @@
         '<td>' + (qso.qsoTime || '') + '</td>' +
         '<td>' + (qso.qsoBand || '') + '</td>' +
         '<td>' + (qso.qsoMode || '') + '</td>' +
-        '<td>' + (qso.rxCall || '') + '</td>' +
+        '<td>' + (qso.rxCall || '') + ' ' + buildFlagsHtml(qso) + '</td>' +
         '<td>' +
           '<button onclick="editEntry(' + index + ')">Edit</button>' +
           '<button onclick="deleteEntry(' + index + ')">Delete</button>' +
