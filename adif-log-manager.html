@@ -412,7 +412,7 @@
     { formId: 'rxCall',     adif: 'CALL',             type: 'text',
       help: 'The callsign of the station you contacted. The "Look up online" button can fill in QTH City/State/Country (and grid, if available) from Callook.info (and HamDB.org, if the optional proxy is set up), when you have an internet connection.' },
     { formId: 'rxOperator', adif: 'CONTACTED_OP',     type: 'text',
-      help: 'The callsign of the person actually operating the other station, if different from their callsign - for example a guest operator at a club station.' },
+      help: 'The callsign of the person actually operating the other station, if different from their callsign - for example a guest operator at a club station. The "Look up online" button fills this in with the licensee\'s name by default, which you can overwrite with an actual operator callsign if you know it.' },
     { formId: 'rxGrid',     adif: 'GRIDSQUARE',       type: 'text',
       help: 'The other station\u2019s Maidenhead grid locator, e.g. FN31pr. Fills in Latitude/Longitude (and CQ/ITU zone) automatically - or enter a lat/lon below and this fills in instead.' },
     { formId: 'rxPower',    adif: 'RX_PWR',           type: 'text',
@@ -1197,7 +1197,9 @@
       const data = await response.json();
       if (data.status !== 'VALID') return null; // includes INVALID and UPDATING
 
-      const result = { city: '', state: '', country: 'United States', grid: '', lat: '', lon: '' };
+      const result = { city: '', state: '', country: 'United States', grid: '', lat: '', lon: '', name: '' };
+
+      if (data.name) result.name = data.name; // e.g. "SMITH, JOHN Q" or a club name
 
       // address.line2 looks like "NEWINGTON, CT 06111" - split into city/state.
       if (data.address && data.address.line2) {
@@ -1222,17 +1224,25 @@
   async function tryHamdbLookup(callsign) {
     if (!HAMDB_PROXY_URL) return null; // not configured - Callook-only until it is
 
+    let response;
     try {
       const url = HAMDB_PROXY_URL + '?callsign=' + encodeURIComponent(callsign);
-      const response = await fetch(url);
-      if (!response.ok) return null;
+      response = await fetch(url);
+    } catch (err) {
+      // Couldn't reach the proxy itself (wrong URL, DNS failure, offline, etc.)
+      // - distinct from a normal "callsign not found" result.
+      throw new Error('PROXY_UNREACHABLE');
+    }
 
+    if (!response.ok) return null; // proxy reached fine, but it (or HamDB) reported an error
+
+    try {
       const data = await response.json();
       const record = data && data.hamdb && data.hamdb.callsign;
       const status = data && data.hamdb && data.hamdb.messages && data.hamdb.messages.status;
       if (!record || status === 'NOT_FOUND') return null;
 
-      const result = { city: '', state: '', country: '', grid: '', lat: '', lon: '' };
+      const result = { city: '', state: '', country: '', grid: '', lat: '', lon: '', name: '' };
       if (record.country) result.country = record.country;
       if (record.state) result.state = record.state;
       // addr2 is usually a "CITY, STATE ZIP"-style line - just take the city part.
@@ -1245,16 +1255,30 @@
       // same way (see applyLookupResult) rather than only the grid square.
       if (record.lat) result.lat = record.lat;
       if (record.lon) result.lon = record.lon;
+      // HamDB splits the name into parts rather than one combined field.
+      const nameParts = [record.fname, record.mi, record.name, record.suffix]
+        .filter(function (part) { return part && part.trim(); });
+      if (nameParts.length > 0) result.name = nameParts.join(' ');
 
-      const gotSomething = result.city || result.state || result.country || result.grid || (result.lat && result.lon);
+      const gotSomething = result.city || result.state || result.country ||
+        result.grid || (result.lat && result.lon) || result.name;
       return gotSomething ? result : null;
     } catch (err) {
-      return null;
+      return null; // unexpected response shape from the proxy - treat as "not found"
     }
   }
 
   function applyLookupResult(prefix, result) {
     let filledSomething = false;
+
+    // Only the Receiver side gets the licensee's name copied into Operator -
+    // the Sender side's Operator is whoever's actually at the key/mic, which
+    // an online lookup of your own callsign has no way to know.
+    if (prefix === 'rx' && result.name) {
+      document.getElementById('rxOperator').value = result.name;
+      document.getElementById('rxOperator').classList.add('auto-filled');
+      filledSomething = true;
+    }
 
     if (result.country) {
       document.getElementById(prefix + 'Country').value = result.country;
@@ -1326,8 +1350,16 @@
     let source = 'Callook.info';
 
     if (!result) {
-      result = await tryHamdbLookup(callsign);
-      source = 'HamDB.org';
+      try {
+        result = await tryHamdbLookup(callsign);
+        source = 'HamDB.org';
+      } catch (err) {
+        if (err.message === 'PROXY_UNREACHABLE') {
+          statusEl.textContent = 'Cannot connect to Cloudflare Worker.';
+          return;
+        }
+        // Anything else unexpected - fall through to the generic not-found message below.
+      }
     }
 
     if (!result) {
