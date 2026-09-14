@@ -149,6 +149,7 @@
   <button id="newFileBtn">New File</button>
   <input type="file" id="openFileInput" accept=".adi,.adif,.txt">
   <button id="saveFileBtn">Save / Download ADIF File</button>
+  <button id="exportCsvBtn">Export to CSV</button>
   <span id="currentFileLabel">(no file loaded)</span>
 </div>
 
@@ -410,7 +411,7 @@
   // border, and opening it for editing highlights exactly which
   // fields still need to be filled in.
   // ============================================================
-  const REQUIRED_FIELDS = ['QSO_DATE', 'TIME_ON', 'BAND', 'MODE', 'CALL'];
+  const REQUIRED_FIELDS = ['QSO_DATE', 'TIME_ON', 'BAND', 'MODE', 'CALL', 'OPERATOR', 'STATION_CALLSIGN', 'MY_GRIDSQUARE'];
 
   // ============================================================
   // ADIF Log Manager
@@ -1049,7 +1050,7 @@
       }
 
       line += '<EOR>';
-      output += line.trim() + '\n\n';
+      output += line.trim() + '\n';
     });
 
     return output;
@@ -1651,7 +1652,17 @@
     { code: 'vt', name: 'Vermont' }, { code: 'va', name: 'Virginia' },
     { code: 'wa', name: 'Washington' }, { code: 'wv', name: 'West Virginia' },
     { code: 'wi', name: 'Wisconsin' }, { code: 'wy', name: 'Wyoming' },
-    { code: 'dc', name: 'District of Columbia' }
+    { code: 'dc', name: 'District of Columbia' },
+    // US territories - these have their own top-level flag code on flagcdn
+    // (e.g. flagcdn.com/pr.png), not a "us-xx" state-subdivision code, so
+    // they're marked isTerritory to build their image URL differently
+    // (see buildFlagsHtml). They're still part of the United States for
+    // country-flag purposes.
+    { code: 'pr', name: 'Puerto Rico', isTerritory: true },
+    { code: 'gu', name: 'Guam', isTerritory: true },
+    { code: 'vi', name: 'U.S. Virgin Islands', isTerritory: true },
+    { code: 'as', name: 'American Samoa', isTerritory: true },
+    { code: 'mp', name: 'Northern Mariana Islands', isTerritory: true }
   ];
 
   const US_STATE_LOOKUP = {};
@@ -1667,16 +1678,26 @@
   }
 
   function buildFlagsHtml(qso) {
-    const country = qso.rxCountry ? COUNTRY_LOOKUP[qso.rxCountry.trim().toUpperCase()] : null;
+    let country = qso.rxCountry ? COUNTRY_LOOKUP[qso.rxCountry.trim().toUpperCase()] : null;
+    const state = qso.rxState ? US_STATE_LOOKUP[qso.rxState.trim().toUpperCase()] : null;
+
+    // Some ADIF files (or manual entries) only fill in State, not Country -
+    // a recognized US state or territory is a reliable enough signal to
+    // infer the country ourselves, as long as Country wasn't already set to
+    // something else we recognize.
+    if (!country && state) {
+      country = COUNTRY_LOOKUP['UNITED STATES'];
+    }
+
     let html = '';
 
-    if (country && country.code === 'us' && qso.rxState) {
-      const state = US_STATE_LOOKUP[qso.rxState.trim().toUpperCase()];
-      if (state) {
-        html += '<img src="https://flagcdn.com/20x15/us-' + state.code + '.png" ' +
-          'alt="" title="' + escapeHtmlAttribute(state.name) + '" class="flag-icon" ' +
-          'onerror="this.style.display=\'none\'"> ';
-      }
+    if (country && country.code === 'us' && state) {
+      // The 50 states use flagcdn's "us-xx" subdivision codes; territories
+      // like Puerto Rico have their own top-level code instead.
+      const stateFlagCode = state.isTerritory ? state.code : 'us-' + state.code;
+      html += '<img src="https://flagcdn.com/20x15/' + stateFlagCode + '.png" ' +
+        'alt="" title="' + escapeHtmlAttribute(state.name) + '" class="flag-icon" ' +
+        'onerror="this.style.display=\'none\'"> ';
     }
 
     if (country) {
@@ -1841,14 +1862,89 @@
     reader.readAsText(file);
   }
 
+  function buildSuggestedFilename(baseName) {
+    // Prefixes today's date (local time - this is just for naming the
+    // download, not an ADIF value) in YYYY.MM.DD form onto a base filename.
+    const today = new Date();
+    const datePrefix = today.getFullYear() + '.' +
+      String(today.getMonth() + 1).padStart(2, '0') + '.' +
+      String(today.getDate()).padStart(2, '0');
+    return datePrefix + '.' + baseName;
+  }
+
   function saveFile() {
+    const suggestedName = buildSuggestedFilename(currentFileName);
+    const chosenName = prompt('Save ADIF file as:', suggestedName);
+    if (!chosenName) return; // user cancelled the prompt
+
     const adifText = buildAdifFile(qsoList);
     const blob = new Blob([adifText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement('a');
     link.href = url;
-    link.download = currentFileName;
+    link.download = chosenName;
+    link.click();
+
+    URL.revokeObjectURL(url);
+    currentFileName = chosenName; // future saves default to this name
+  }
+
+
+  // ---------------- Exporting to CSV ----------------
+  // A flat spreadsheet view of the log - handy for sorting/filtering in
+  // Excel or Sheets, but it's a one-way export, not something this tool
+  // can read back in (use the ADIF save/open for that).
+
+  function csvEscapeValue(value) {
+    const str = value === null || value === undefined ? '' : String(value);
+    if (/[",\r\n]/.test(str)) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
+  function buildCsvFile(qsos) {
+    // One column per known field (using its ADIF name as the header), plus
+    // a column for each custom "Other ADIF Fields" name used anywhere in
+    // the log, so nothing gets silently left out of the export.
+    const extraFieldNames = new Set();
+    qsos.forEach(function (qso) {
+      if (qso.extraFields) {
+        Object.keys(qso.extraFields).forEach(function (name) {
+          extraFieldNames.add(name);
+        });
+      }
+    });
+    const sortedExtraNames = Array.from(extraFieldNames).sort();
+
+    const headers = fieldMap.map(function (f) { return f.adif; }).concat(sortedExtraNames);
+    const lines = [headers.map(csvEscapeValue).join(',')];
+
+    qsos.forEach(function (qso) {
+      const row = fieldMap.map(function (f) { return qso[f.formId] || ''; });
+      sortedExtraNames.forEach(function (name) {
+        row.push((qso.extraFields && qso.extraFields[name]) || '');
+      });
+      lines.push(row.map(csvEscapeValue).join(','));
+    });
+
+    return lines.join('\r\n');
+  }
+
+  function exportCsv() {
+    const baseName = currentFileName.replace(/\.[^.]+$/, '') + '.csv';
+    const suggestedName = buildSuggestedFilename(baseName);
+    const chosenName = prompt('Export CSV as:', suggestedName);
+    if (!chosenName) return;
+
+    const csvText = buildCsvFile(qsoList);
+    const blob = new Blob([csvText], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = chosenName;
     link.click();
 
     URL.revokeObjectURL(url);
@@ -1860,6 +1956,7 @@
   document.getElementById('newFileBtn').addEventListener('click', newFile);
   document.getElementById('openFileInput').addEventListener('change', openFile);
   document.getElementById('saveFileBtn').addEventListener('click', saveFile);
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
   document.getElementById('addNewBtn').addEventListener('click', addNewEntry);
   document.getElementById('saveEntryBtn').addEventListener('click', saveEntry);
   document.getElementById('cancelEntryBtn').addEventListener('click', cancelEntry);
