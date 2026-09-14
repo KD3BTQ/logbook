@@ -1,10 +1,10 @@
 {
-  "required_fields": ['QSO_DATE', 
-		      'TIME_ON', 
-                      'BAND',  
-                      'MODE', 
-                      'CALL', 
-                      'OPERATOR', 
-                      'STATION_CALLSIGN', 
-                      'MY_GRIDSQUARE'];
+  "required_fields": ["QSO_DATE", 
+		      "TIME_ON", 
+                      "BAND",  
+                      "MODE", 
+                      "CALL", 
+                      "OPERATOR", 
+                      "STATION_CALLSIGN", 
+                      "MY_GRIDSQUARE"]
 }
