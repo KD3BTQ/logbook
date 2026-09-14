@@ -2,7 +2,7 @@
 This repository hosts the club's historical contact log information and tools to edit said log files. This information is stored via ADIF file format, and the addition (or modification) of ADIF log files are handled via Github Pull Requests (PR's) that are approved by repository maintainers. If you are are here to add logs to the club log file, instructions on how to do so can be found below at [Contributing to the Club Logbook](##Contributing-to-the-Club-Logbook)
 
 ## What is an ADIF file?
-ADIF (Amateur Data Interchange Format) is a plain-text file format used by amateur radio operators to store and exchange logbook contact records (QSOs) between different logging programs. Each field is written as `<FIELDNAME:LENGTH>VALUE`, where `LENGTH` is the character count of `VALUE` (e.g., `<CALL:5>W1AW `). A record (one contact) ends with the tag `<EOR>`, and an optional header section — free-form text followed by `<EOH>` — can appear at the top of the file to store metadata like the program name and ADIF version. Common fields include `CALL` (callsign), `QSO_DATE` (YYYYMMDD), `TIME_ON` (HHMM or HHMMSS), `BAND`, `MODE`, and `FREQ`. Since it's just text, you can open an `.adi`/`.adif` file in any text editor and add or fix a record by hand as long as you keep the field-length counts accurate and terminate each record with `<EOR>`.
+ADIF [(Amateur Data Interchange Format)](https://adif.org/317/ADIF_317.htm) is a plain-text file format used by amateur radio operators to store and exchange logbook contact records (QSOs) between different logging programs. Each field is written as `<FIELDNAME:LENGTH>VALUE`, where `LENGTH` is the character count of `VALUE` (e.g., `<CALL:5>W1AW `). A record (one contact) ends with the tag `<EOR>`, and an optional header section — free-form text followed by `<EOH>` — can appear at the top of the file to store metadata like the program name and ADIF version. Common fields include `CALL` (callsign), `QSO_DATE` (YYYYMMDD), `TIME_ON` (HHMM or HHMMSS), `BAND`, `MODE`, and `FREQ`. Since it's just text, you can open an `.adi`/`.adif` file in any text editor and add or fix a record by hand as long as you keep the field-length counts accurate and terminate each record with `<EOR>`.
 
 ## Contributing to the Club Logbook
 To contribute to the club logbook, you must submit either
@@ -12,10 +12,13 @@ To contribute to the club logbook, you must submit either
 Either submission route will notify club logbook maintainers that a change to the club logbook has been requested. They will review the request via GitHub, and respond with their approval or a request for any required changes. 
 
 ### 1. Submit an ADIF file with required fields
-todo
+1. Create a branch in this repository with a descriptive name (i.e., "International Lighthouse Lightship 2026")
+2. Add your new ADIF file or ADIF edits to the branch
+    - The ADIF supplied must have all of the REQUIRED fields populated. If it does not, the automatic pipeline checks will fail. The site's ADIF editor (see [Using the Club Logbook ADIF Editor](#Using-the-Club-Logbook-ADIF-Editor)) will highlight all impartial ADIF entries red. 
+4. Create a 'Pull Request' for your edits. A maintainer will review and request edits or approve. 
 
 ### 2. Submit a GitHub Issue with contact information with required fields
-todo
+If you are unfamiliar with GitHub and not willing to figure it out, we would still like to capture your Club contacts! Please open an issue in GitHub using the "issues" feature and list your contacts in plain-text there. A maintainer will enter your entries for you and submit them to the club's logs. 
 
 ## Using the Club Logbook ADIF Editor
 This repository contains a tool to create or edit an existing ADIF file. This HTML page is [deployed to a GitHub pages site](https://kd3btq.github.io/logbook/) for easy access, but can also be downloaded to your machine for offline use. _**NOTE**: If you are not using the website version of the ADIF editor, then the tool will not have its callsign lookup information capability._ To download and use the tool offline, simply download the `index.html` page from this repo. 
