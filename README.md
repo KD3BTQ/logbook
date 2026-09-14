@@ -26,3 +26,17 @@ This repository contains a tool to create or edit an existing ADIF file. This HT
 **To create a new ADIF file**, simply visit the [deployed HTML page](https://kd3btq.github.io/logbook/) to get started. At this page, you can set both the callsign used for the contact (the club callsign W3APL), and your callsign or name as the 'Operator', and then the grid location of your current operations. (These three fields will then auto-populate into every 'New QSO' form that you create). Next, click 'Add New QSO', and fill in all of the details of your QSO. If a field is required, it the page will not let you save your QSO until it is populated. 
 
 **To edit an existing ADIF**. Many programs will create an ADIF file for you, and you will want to use this ADIF as a starting point for your log file submission. You can load the existing ADIF file that you have into the ADIF editor, and the editor will notify you of any missing fields in the existing ADIF. You can edit the existing entries, and then save a new file with your edits. 
+
+## Required ADIF Fields
+The following fields are required for ALL contacts in the provided ADIF file. 
+
+| Field         | Description                          | Format / Example              | Required? |
+|---------------|---------------------------------------|--------------------------------|-----------|
+| `CALL`        | Callsign of the station worked        | `W1AW`                         | Yes       |
+| `QSO_DATE`    | Date of contact (UTC)                 | `YYYYMMDD` (`20260913`)        | Yes       |
+| `TIME_ON`     | Time contact started (UTC)            | `HHMM` or `HHMMSS` (`1830`)    | Yes       |
+| `BAND`        | Band used                             | `20m`, `40m`, `2m`             | Yes       |
+| `MODE`        | Mode used                             | `SSB`, `FT8`, `CW`             | Yes       |
+| `FREQ`        | Exact frequency in MHz                | `14.245`                       | Yes       |
+| `STATION_CALLSIGN` | Callsign of the logging station  | `K1ABC`                        | Yes       |
+| `OPERATOR`    | Callsign of the operator at the mic    | `K1ABC`                        | Yes |
