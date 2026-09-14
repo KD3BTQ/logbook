@@ -30,13 +30,13 @@ This repository contains a tool to create or edit an existing ADIF file. This HT
 ## Required ADIF Fields
 The following fields are required for ALL contacts in the provided ADIF file. 
 
-| Field         | Description                          | Format / Example              | Required? |
-|---------------|---------------------------------------|--------------------------------|-----------|
-| `CALL`        | Callsign of the station worked        | `W1AW`                         | Yes       |
-| `QSO_DATE`    | Date of contact (UTC)                 | `YYYYMMDD` (`20260913`)        | Yes       |
-| `TIME_ON`     | Time contact started (UTC)            | `HHMM` or `HHMMSS` (`1830`)    | Yes       |
-| `BAND`        | Band used                             | `20m`, `40m`, `2m`             | Yes       |
-| `MODE`        | Mode used                             | `SSB`, `FT8`, `CW`             | Yes       |
-| `FREQ`        | Exact frequency in MHz                | `14.245`                       | Yes       |
-| `STATION_CALLSIGN` | Callsign of the logging station  | `K1ABC`                        | Yes       |
-| `OPERATOR`    | Callsign of the operator at the mic    | `K1ABC`                        | Yes |
+| Field         | Description                          | Format / Example              | 
+|---------------|---------------------------------------|--------------------------------|
+| `CALL`        | Callsign of the station worked        | `W1AW`                         |
+| `QSO_DATE`    | Date of contact (UTC)                 | `YYYYMMDD` (`20260913`)        | 
+| `TIME_ON`     | Time contact started (UTC)            | `HHMM` or `HHMMSS` (`1830`)    |
+| `BAND`        | Band used                             | `20m`, `40m`, `2m`             |
+| `MODE`        | Mode used                             | `SSB`, `FT8`, `CW`             |
+| `FREQ`        | Exact frequency in MHz                | `14.245`                       |
+| `STATION_CALLSIGN` | Callsign of the logging station  | `K1ABC`                        |
+| `OPERATOR`    | Callsign of the operator at the mic    | `K1ABC`                        |
