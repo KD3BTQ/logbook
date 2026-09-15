@@ -6,5 +6,6 @@
                       "CALL", 
                       "OPERATOR", 
                       "STATION_CALLSIGN", 
-                      "MY_GRIDSQUARE"]
+                      "MY_GRIDSQUARE", 
+  					  "NOTES"]
 }
