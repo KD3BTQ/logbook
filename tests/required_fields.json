@@ -7,5 +7,5 @@
                       "OPERATOR", 
                       "STATION_CALLSIGN", 
                       "MY_GRIDSQUARE", 
-  					  "NOTES"]
+  					  "COMMENT"]
 }
