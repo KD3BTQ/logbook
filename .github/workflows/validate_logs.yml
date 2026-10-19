@@ -1,13 +1,16 @@
 name: Validate and Combine ADIF Logs
 
 on:
-  push:
-    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
 
 permissions:
-  contents: write
+  contents: read
+
+# Avoid overlapping runs on the same PR racing each other
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   validate-and-combine:
@@ -16,6 +19,12 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
+      with:
+        # Check out the real PR branch (not GitHub's temporary merge commit) so we can push to it
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        ref: ${{ github.head_ref }}
+        # A PAT is required so the bot's push re-triggers this workflow
+        token: ${{ secrets.LOGBOOK_PAT || github.token }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -36,10 +45,25 @@ jobs:
         name: combined-adif-log
         path: combined_logs.adi
 
-    - name: Commit Combined Log Back to Repository
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    - name: Commit Combined Log to PR Branch
+      if: github.event.pull_request.head.repo.full_name == github.repository
       run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        BOT_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
+        git config user.email "$BOT_EMAIL"
+
         git add combined_logs.adi
-        git diff --staged --quiet || (git commit -m "chore: update combined ADIF log [skip ci]" && git push)
+        if git diff --staged --quiet; then
+          echo "combined_logs.adi is already up to date."
+          exit 0
+        fi
+
+        # Loop guard: if the bot just committed and the output STILL changed,
+        # the script isn't deterministic. Fail instead of committing forever.
+        if [ "$(git log -1 --format=%ae)" = "$BOT_EMAIL" ]; then
+          echo "::error::Output changed again right after an auto-update. Is process_logs.py deterministic (no timestamps, stable ordering)?"
+          exit 1
+        fi
+
+        git commit -m "chore: update combined ADIF log"
+        git push
